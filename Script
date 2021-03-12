@@ -1,0 +1,411 @@
+CREATE DATABASE taller
+GO
+use taller
+
+GO
+create table clientes (
+	id int primary key identity(0,1),
+	ruc_cli varchar(30) not null unique,
+	nombre_cli varchar(30) not null,
+	direccion_cli nvarchar(100) null default('N/A'),
+	telefono_cli nvarchar(12) null default('N/A')
+)
+
+GO
+
+create table productos (
+	id int primary key identity(0,1),
+	descripcion nvarchar(100) not null,
+	tipo_producto varchar(50) not null,
+	cantidad int not null,
+	precio float not null,
+)
+
+GO
+create table consumo_rollo (
+	id int primary key identity(0,1),
+	fecha date not null,
+	id_prod int not null,
+	cantidad int not null
+	constraint "fk_idprod" foreign key
+	("id_prod")	references dbo.productos("id")
+)
+
+GO
+CREATE TABLE empleados (
+    id INT PRIMARY KEY IDENTITY(0,1),
+	dni nvarchar(15) not null unique,
+    nombre_emp VARCHAR(50) NOT NULL,
+    direccion_emp VARCHAR(100) null default('N/A'),
+    telefono_emp VARCHAR(15) null default('N/A'),
+    fecha_ingreso DATE NOT NULL,
+    cargo VARCHAR(20) NOT NULL,
+    tipo_cargo VARCHAR(20) NOT NULL,
+    tipo_pago VARCHAR(20) NOT NULL,
+    sueldo float not null
+)
+
+GO
+create table asistencias (
+	id int primary key identity(0,1),
+	id_emp int not null,
+	fecha_entrada date not null,
+	hora_entrada time not null,
+	fecha_salida date null default('01/01/2000'),
+	hora_salida time null default('00:00'),
+	estado varchar(10)
+	constraint "fk_asistencias_emp" FOREIGN KEY 
+	("id_emp") REFERENCES empleados ("id")
+)
+GO
+CREATE TABLE produccion(
+    id INT PRIMARY KEY IDENTITY(0,1),
+    fecha_produccion DATE NOT NULL,
+    id_prod_ant INT NOT NULL,
+    id_prod_nuevo INT NOT NULL,
+    id_emp INT NOT NULL,
+    tipo_produccion VARCHAR(50) NOT NULL, --Corte, confeccion, doblado.
+    cantidad INT NOT NULL,
+    Observaciones VARCHAR(150),
+    CONSTRAINT "fk_id_prod_ant" FOREIGN KEY 
+	("id_prod_ant") REFERENCES dbo.productos (
+		"id"),
+    CONSTRAINT "fk_id_prod_nuevo" FOREIGN KEY 
+	("id_prod_nuevo") REFERENCES dbo.productos (
+		"id"),
+    CONSTRAINT "fk_id_emp" FOREIGN KEY 
+	("id_emp") REFERENCES dbo.empleados (
+		"id")
+)
+
+GO
+create table produccion_dañada (
+	id int primary key identity(0,1),
+	fecha date not null,
+	nombre_emp varchar(30) not null,
+	id_prod int not null,
+	cantidad int not null
+	constraint "fk_ProdDañada_idProd" 
+	foreign key ("id_prod") references dbo.productos ("id")
+)
+
+Go
+create table productos_perdidos (
+	id int primary key identity(0,1),
+	id_prod int not null,
+	registrado_por varchar(50) not null,
+	fecha date not null,
+	cantidad int not null,
+	observaciones varchar(300) null default('N/A')
+	constraint "fk_prodPerdidos_idprod" foreign key
+	("id_prod") references dbo.productos("id")
+)
+
+GO
+
+CREATE TABLE proveedores (
+    id INT PRIMARY KEY IDENTITY(0,1),
+    ruc_prov VARCHAR(50) NOT NULL UNIQUE,
+    nombre_prov VARCHAR(30) NOT NULL UNIQUE,
+    direccion_prov VARCHAR(100) null default('N/A'),
+    telefono_prov VARCHAR(15) null default('N/A')
+)
+
+GO
+create table recepcion (
+	id int primary key identity(0,1),
+	fecha date not null,
+	id_proveedor int not null,
+	id_prod int not null,
+	cantidad int not null
+	constraint "fk_recepcion_idProv" foreign key 
+	("id_proveedor") references dbo.proveedores("id"),
+	constraint "fk_recepcion_idProd" foreign key 
+	("id_prod") references productos("id")
+)
+
+GO
+create table tipos_produccion (
+	id int primary key identity(0,1),
+	tipo_produccion varchar(15) not null
+)
+
+Go
+create table usuarios (
+	id int primary key identity(0,1),
+	usuario varchar(30) not null,
+	clave varchar(30) not null,
+	rol smallint not null default(1)
+)
+
+GO
+create table ventas (
+	id int primary key identity(0,1),
+	n_factura nvarchar(30) not null,
+	fecha_venta date not null,
+	id_cli int not null,
+	id_prod int not null,
+	cantidad int not null,
+	precio_venta float not null
+	CONSTRAINT "fk_ventas_cli" FOREIGN KEY
+	("id_cli") references dbo.clientes("id"),
+	CONSTRAINT "fk_ventas_prod" FOREIGN KEY
+	("id_prod") REFERENCES dbo.productos("id")
+)
+
+Go
+create view vw_calcular_produccion
+AS
+SELECT 
+pr.fecha_produccion as fecha,
+p.descripcion as producto,
+e.nombre_emp as empleado,
+pr.tipo_produccion as actividad,
+pr.cantidad as cantidad,
+e.sueldo as sueldo,
+(e.sueldo * pr.cantidad ) as total,
+pr.observaciones as observaciones
+FROM
+produccion pr,
+productos p,
+empleados e
+WHERE
+pr.id_prod_nuevo = p.id AND
+pr.id_emp = e.id
+
+GO
+CREATE VIEW consulta_asistencias
+AS
+SELECT 
+e.nombre_emp as empleado,
+a.fecha_entrada,
+a.hora_entrada,
+a.fecha_salida,
+a.hora_salida,
+a.estado
+FROM
+empleados e,
+asistencias a
+WHERE
+a.id_emp = e.id
+
+GO
+CREATE VIEW consulta_compras
+AS
+SELECT
+r.fecha as fecha,
+p.nombre_prov as nombre_prov,
+pr.descripcion as descripcion,
+r.cantidad as cantidad,
+pr.precio as precio,
+(r.cantidad * pr.precio) as total
+FROM
+recepcion r,
+proveedores p,
+productos pr
+WHERE
+r.id_prod = pr.id AND
+r.id_proveedor = p.id
+
+GO
+CREATE VIEW ventas_totales
+AS
+SELECT
+v.fecha_venta,
+c.nombre_cli,
+p.descripcion,
+v.cantidad,
+v.precio_venta,
+(v.cantidad * v.precio_venta) as total
+FROM 
+ventas v,
+productos p,
+clientes c
+WHERE
+v.id_prod = p.id AND
+v.id_cli = c.id
+
+GO
+CREATE VIEW ver_produccion
+AS
+SELECT 
+pr.id as id,
+pr.fecha_produccion as fecha,
+(select descripcion from productos WHERE id=pr.id_prod_ant) as ProductoAnterior,
+(select descripcion from productos WHERE id=pr.id_prod_nuevo) as ProductoNuevo,
+e.nombre_emp as empleado,
+pr.tipo_produccion as TipoProduccion,
+pr.cantidad as cantidad,
+pr.Observaciones
+FROM
+produccion pr,
+productos pt,
+empleados e WHERE
+pr.id_prod_nuevo = pt.id AND
+pr.id_emp = e.id
+
+GO
+CREATE VIEW visualizar_consumos
+AS
+SELECT
+c.id as id,
+c.fecha as fecha,
+p.descripcion as descripcion,
+c.cantidad as cantidad
+FROM
+consumo_rollo c,
+productos p
+WHERE
+c.id_prod = p.id
+
+GO
+CREATE VIEW vw_vista_dañados
+AS
+SELECT 
+pd.fecha as fecha,
+pd.nombre_emp as responsable,
+pt.descripcion as producto,
+pd.cantidad as cantidad
+FROM
+produccion_dañada pd,
+productos pt
+WHERE
+pd.id_prod = pt.id
+
+GO
+CREATE VIEW visualizar_perdidos
+AS
+SELECT
+pt.descripcion as descripcion,
+pp.registrado_por as responsable,
+pp.fecha as fecha,
+pp.cantidad as cantidad,
+pp.observaciones as observaciones
+FROM
+productos_perdidos pp,
+productos pt
+WHERE
+pp.id_prod = pt.id
+
+GO
+
+DELETE FROM asistencias WHERE id=0
+
+--Triggers--
+GO
+CREATE TRIGGER tr_insert_produccion ON produccion after INSERT 
+AS
+DECLARE @idProdAnt int
+DECLARE @idProdNuev int
+DECLARE @CantActualAnt int
+DECLARE @CantActualNuev int
+DECLARE @CantInsertada int
+set @idProdAnt = (select id_prod_ant FROM inserted)
+set @idProdNuev = (select id_prod_nuevo FROM inserted)
+set @CantActualAnt = (select cantidad from productos WHERE id= @idProdAnt)
+set @CantActualnuev = (select cantidad from productos WHERE id= @idProdNuev)
+set @CantInsertada = (select cantidad FROM inserted)
+UPDATE productos SET cantidad = @CantActualAnt - @CantInsertada WHERE id=@idProdAnt
+UPDATE productos SET cantidad = @CantActualNuev + @CantInsertada WHERE id=@idProdNuev
+
+GO
+CREATE TRIGGER tr_insert_consumo ON consumo_rollo after INSERT 
+AS
+DECLARE @idProd int
+DECLARE @cantAnterior int
+DECLARE @cantInsertada int
+set @idProd = (SELECT id_prod FROM inserted)
+set @cantAnterior = (SELECT cantidad FROM productos WHERE id=@idProd)
+set @cantInsertada = (SELECT cantidad FROM inserted)
+UPDATE productos SET cantidad = @cantAnterior - @cantInsertada WHERE id = @idProd
+
+GO
+CREATE TRIGGER tr_insert_productoPerdido ON productos_perdidos AFTER INSERT
+AS
+DECLARE @idProd int
+DECLARE @cantAnterior int
+DECLARE @cantInsertada int
+set @idProd = (SELECT id_prod FROM inserted)
+set @cantAnterior = (SELECT cantidad FROM productos WHERE id=@idProd)
+set @cantInsertada = (SELECT cantidad FROM inserted)
+UPDATE productos SET cantidad = @cantAnterior - @cantInsertada WHERE id = @idProd
+
+GO
+CREATE TRIGGER tr_insert_productoDañado ON produccion_dañada AFTER INSERT
+AS
+DECLARE @idProd int
+DECLARE @cantAnterior int
+DECLARE @cantInsertada int
+set @idProd = (SELECT id_prod FROM inserted)
+set @cantAnterior = (SELECT cantidad FROM productos WHERE id=@idProd)
+set @cantInsertada = (SELECT cantidad FROM inserted)
+UPDATE productos SET cantidad = @cantAnterior - @cantInsertada WHERE id = @idProd
+
+GO
+CREATE TRIGGER tr_insert_recepcion ON recepcion AFTER INSERT
+AS
+DECLARE @idProd int
+DECLARE @cantAnterior int
+DECLARE @cantInsertada int
+set @idProd = (SELECT id_prod FROM inserted)
+set @cantAnterior = (SELECT cantidad FROM productos WHERE id=@idProd)
+set @cantInsertada = (SELECT cantidad FROM inserted)
+UPDATE productos SET cantidad = @cantAnterior + @cantInsertada WHERE id = @idProd
+
+GO
+CREATE TRIGGER tr_insert_venta ON ventas AFTER INSERT
+AS
+DECLARE @idProd int
+DECLARE @cantAnterior int
+DECLARE @cantInsertada int
+set @idProd = (SELECT id_prod FROM inserted)
+set @cantAnterior = (SELECT cantidad FROM productos WHERE id=@idProd)
+set @cantInsertada = (SELECT cantidad FROM inserted)
+UPDATE productos SET cantidad = @cantAnterior - @cantInsertada WHERE id = @idProd
+select top(1) * from produccion order by fecha_produccion desc
+
+GO
+CREATE TRIGGER tr_editar_produccion ON produccion AFTER DELETE
+AS
+DECLARE @idProdAnt int
+DECLARE @idProdNuev int
+DECLARE @CantActualAnt int
+DECLARE @CantActualNuev int
+DECLARE @CantInsertada int
+set @idProdAnt = (select id_prod_ant FROM deleted)
+set @idProdNuev = (select id_prod_nuevo FROM deleted)
+set @CantActualAnt = (select cantidad from productos WHERE id= @idProdAnt)
+set @CantActualnuev = (select cantidad from productos WHERE id= @idProdNuev)
+set @CantInsertada = (select cantidad FROM deleted)
+if(update(cantidad))
+begin
+	UPDATE productos SET cantidad = @CantActualAnt + @CantInsertada WHERE id=@idProdAnt
+	UPDATE productos SET cantidad = @CantActualNuev - @CantInsertada WHERE id=@idProdNuev
+end
+
+GO
+CREATE TRIGGER tr_eliminar_produccion ON produccion AFTER DELETE
+AS
+DECLARE @idProdAnt int
+DECLARE @idProdNuev int
+DECLARE @CantActualAnt int
+DECLARE @CantActualNuev int
+DECLARE @CantInsertada int
+set @idProdAnt = (select id_prod_ant FROM deleted)
+set @idProdNuev = (select id_prod_nuevo FROM deleted)
+set @CantActualAnt = (select cantidad from productos WHERE id= @idProdAnt)
+set @CantActualnuev = (select cantidad from productos WHERE id= @idProdNuev)
+set @CantInsertada = (select cantidad FROM deleted)
+UPDATE productos SET cantidad = @CantActualAnt + @CantInsertada WHERE id=@idProdAnt
+UPDATE productos SET cantidad = @CantActualNuev - @CantInsertada WHERE id=@idProdNuev
+
+GO
+CREATE TRIGGER tr_eliminar_consumo ON consumo_rollo after DELETE 
+AS
+DECLARE @idProd int
+DECLARE @cantAnterior int
+DECLARE @cantInsertada int
+set @idProd = (SELECT id_prod FROM deleted)
+set @cantAnterior = (SELECT cantidad FROM productos WHERE id=@idProd)
+set @cantInsertada = (SELECT cantidad FROM deleted)
+UPDATE productos SET cantidad = @cantAnterior + @cantInsertada WHERE id = @idProd
